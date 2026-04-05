@@ -8,30 +8,15 @@ import (
 	"os"
 
 	"github.com/arunima10a/agentic-recruiter/internal/domain"
-	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
-func getDBConnStr() string {
-	user := os.Getenv("DB_USER")
-	pass := os.Getenv("DB_PASS")
-	name := os.Getenv("DB_NAME")
-	host := os.Getenv("DB_HOST")
-	port := os.Getenv("DB_PORT")
-
-	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		host, port, user, pass, name)
-}
 
 func main() {
 	// Setup Database Connection
-	godotenv.Load()
-
-	// 2. Use the helper function
-	connStr := getDBConnStr()
-	db, err := sql.Open("postgres", connStr)
+	db, err := sql.Open("postgres", "user=arunima dbname=hiring_agent_db sslmode=disable")
 	if err != nil {
-		log.Fatalf("Database connection failed: %v", err)
+		log.Fatal("DB Connection failed:", err)
 	}
 	defer db.Close()
 
@@ -59,14 +44,14 @@ func main() {
 			fmt.Printf("Skipping %s: No answer content found.\n", c.Name)
 			continue
 		}
-
+		
 		tx, err := db.Begin()
 		if err != nil {
 			log.Printf("Could not start transaction for %s: %v", c.Name, err)
 			continue
 		}
 
-		// duplication to check if already in DB
+		// duplication (check if already in DB)
 		var existingID string
 		err = tx.QueryRow("SELECT external_id FROM candidates WHERE external_id = $1 FOR UPDATE", c.ID).Scan(&existingID)
 
@@ -87,22 +72,22 @@ func main() {
 			payload, _ := json.Marshal(c)
 			_, err = tx.Exec(`
 				INSERT INTO outbox (topic, payload) 
-				VALUES ($1, $2)`,
+				VALUES ($1, $2)`, 
 				"candidate.ingested", payload)
-
+			
 			if err != nil {
 				tx.Rollback()
 				fmt.Printf("Failed to save outbox for %s: %v\n", c.Name, err)
 				continue
 			}
-
+	
 			// COMMIT
 			if err := tx.Commit(); err != nil {
 				fmt.Printf("Transaction commit failed for %s: %v\n", c.Name, err)
 			} else {
 				fmt.Printf("%s saved to DB and Outbox (Atomic)\n", c.Name)
 			}
-
+	
 		} else {
 			// candidate already exists, close the transaction
 			tx.Rollback()

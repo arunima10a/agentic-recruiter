@@ -6,7 +6,7 @@ import logging
 from dotenv import load_dotenv
 from internal.intelligence.processor import IntelligenceProcessor
 
-# Setup Logging 
+# Setup Logging (Essential for 24/7 autonomous agents)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -15,11 +15,11 @@ def main():
     load_dotenv()
     
     db_params = {
-        "host": os.getenv("DB_HOST", "localhost"),
-        "database": os.getenv("DB_NAME", "hiring_agent_db"),
-        "user": os.getenv("DB_USER", "postgres"), 
-        "password": os.getenv("DB_PASS", ""),
-        "port": os.getenv("DB_PORT", 5432)
+        "host": "localhost",
+        "database": "hiring_agent_db",
+        "user": "arunima",
+        "password": "", 
+        "port": 5432
     }
     
     gemini_key = os.getenv("GEMINI_API_KEY")
@@ -41,6 +41,7 @@ def main():
         connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
         channel = connection.channel()
 
+    
         channel.queue_declare(queue='candidate.ingested', durable=True)
         
       
@@ -53,12 +54,11 @@ def main():
             The Core Pipeline Trigger
             """
             try:
-                # Parse ingested data from go
+                # Parse Ingested Data from Go
                 candidate_data = json.loads(body)
                 logger.info(f" Processing: {candidate_data.get('name', 'Unknown')}")
 
-                # Execute the full Intelligence + Anti-Cheat Pipeline
-                # Embedding -> Similarity -> Scoring -> Outbox Save
+               
                 processor.process_and_save(candidate_data)
 
                 # Acknowledge RabbitMQ 

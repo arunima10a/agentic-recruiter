@@ -14,11 +14,11 @@ def main():
     load_dotenv()
     
     db_params = {
-        "host": os.getenv("DB_HOST", "localhost"),
-        "database": os.getenv("DB_NAME", "hiring_agent_db"),
-        "user": os.getenv("DB_USER", "postgres"), # Default to postgres
-        "password": os.getenv("DB_PASS", ""),
-        "port": os.getenv("DB_PORT", 5432)
+        "host": "localhost",
+        "database": "hiring_agent_db",
+        "user": "arunima",
+        "password": "", # will change if set one
+        "port": 5432
     }
     
     gemini_key = os.getenv("GEMINI_API_KEY")
