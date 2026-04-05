@@ -1,0 +1,14 @@
+# Secrets
+.env
+
+# Go
+bin/
+*.exe
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store

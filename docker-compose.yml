@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  postgres:
+    image: pgvector/pgvector:pg16 
+    environment:
+      POSTGRES_USER: arunima
+      POSTGRES_DB: hiring_agent_db
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"   # Event Bus
+      - "15672:15672" # Dashboard 

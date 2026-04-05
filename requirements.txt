@@ -1,0 +1,5 @@
+python-dotenv
+pika
+psycopg2-binary
+google-generativeai
+pgvector

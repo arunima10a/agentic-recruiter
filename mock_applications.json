@@ -1,0 +1,50 @@
+[
+    {
+        "id": "app_001",
+        "name": "Aarav Sharma",
+        "email": "aarav.test@example.com",
+        "github_url": "https://github.com/aarav-dev-empty",
+        "answers": [
+            {
+                "question": "Why should we hire you?",
+                "answer": "I am a very hardworking student. I have done many projects in Java. Please give me a chance. I am very much interested in this internship."
+            }
+        ]
+    },
+    {
+        "id": "app_002",
+        "name": "Priya Das",
+        "email": "priya.ai@example.com",
+        "github_url": "https://github.com/priyadas",
+        "answers": [
+            {
+                "question": "Why should we hire you?",
+                "answer": "In today's rapidly evolving technological landscape, my diverse skill set and passion for innovation make me a prime candidate. I'm committed to leveraging my expertise to drive meaningful results."
+            }
+        ]
+    },
+    {
+        "id": "app_003",
+        "name": "Vikram Singh",
+        "email": "vikram@example.com",
+        "github_url": "https://github.com/vikram-codes",
+        "answers": [
+            {
+                "question": "Why should we hire you?",
+                "answer": "Maine bohot React kaam kiya hai. I built a full-stack app using Node and Express. My GitHub has all the code. I can join immediately."
+            }
+        ]
+    },
+    {
+        "id": "app_004",
+        "name": "Sameer Gupta",
+        "email": "sameer@example.com",
+        "github_url": "https://github.com/sameerG",
+        "answers": [
+            {
+                "question": "Why should we hire you?",
+                "answer": "Maine bohot React kaam kiya hai. I built a full-stack app using Node and Express. My GitHub has all the code. I can join immediately."
+            }
+        ]
+    }
+]
