@@ -1,126 +1,152 @@
-This is a Senior-level README written in plain, clear English. It is designed to guide the hiring manager through your project without confusing them, while still proving you know exactly what you are doing.
+#  AR-1: The Smart Hiring Agent
 
-AR-1: The Smart Hiring Agent
+AR-1 is an automated hiring system designed to handle the pressure of 1,000+ job applications. Instead of just filtering by keywords, it **thinks**, **vets**, and **interacts** with candidates like a real recruiter would.
 
-AR-1 is an automated system designed to handle 1,000+ job applications at once. It doesn't just read resumes—it thinks, vets, and interacts with candidates like a real recruiter would.
+It uses a "Distributed Nervous System" to ensure that even if the internet blinks or a server restarts, no candidate is ever lost.
 
-What does this Agent do?
+---
 
-Extracts Data: It "sniffs" applicant data from platforms like Internshala.
+##  How it Works (The Simple View)
 
-Scores Quality: It uses AI (Gemini) to tell the difference between a "Great Builder" and a "Generic Applicant."
+The system is split into four "Workers" that talk to each other through a message broker (RabbitMQ):
 
-Catches Cheaters: It uses "Vector Memory" to find candidates who are copy-pasting from each other or using ChatGPT.
+1. **The Feeder (Go):** Scrapes applicant data and saves it to the database.  
+2. **The Brain (Python):** Uses AI (Gemini) to score answers and check for cheating.  
+3. **The Relay (Go):** Moves data between the database and the "Brain" safely using the **Transactional Outbox Pattern**.  
+4. **The Voice (Go):** Sends personalized, contextual emails to candidates based on their results.  
 
-Sends Emails: It starts contextual conversations with top candidates automatically.
+---
 
-Stays Reliable: It uses a "Transactional Outbox" system—meaning if the power goes out or the internet blinks, the agent remembers exactly where it left off. No candidate is ever lost.
+##  Key Features
 
-How it Works (The Simple View)
+### 1. Anti-Cheat Engine (Component 4)
+Many candidates use ChatGPT or copy from friends. AR-1 has a two-layer defense:
+- **AI Fingerprinting:** It scans for common "AI phrases" (like *"In today's rapidly evolving landscape"*).
+- **Semantic Similarity:** It uses **Vector Search (pgvector)** to compare every new answer to every old answer. If two people submit the same project description, the agent flags them instantly.
 
-The system is split into four "Workers" that talk to each other:
+### 2. Technical Intelligence (Component 2)
+The agent doesn't just look for length. It looks for "Technical Density." It rewards candidates who explain **how** they built something and penalizes generic buzzwords.
 
-The Feeder (Go): Scrapes the data and saves it to the database.
+### 3. Reliability (Component 6)
+We use the **Transactional Outbox Pattern**. This is a professional engineering standard. If the AI scores a candidate but the email system is down, the database "remembers" the intent and sends the email as soon as the system is back online.
 
-The Brain (Python): Uses AI to score the answers and check for cheating.
+---
 
-The Relay (Go): Moves data between the database and the message broker (RabbitMQ) safely.
+##  The Tech Stack
 
-The Voice (Go): Sends personalized emails to candidates based on their scores.
+- **Go:** High-performance concurrency for the "Body" (Ingestion & Messaging)  
+- **Python:** Advanced AI processing and Vector math for the "Brain"  
+- **PostgreSQL + pgvector:** Relational memory with semantic search capabilities  
+- **RabbitMQ:** The event bus that keeps all workers connected  
+- **Google Gemini API:** For technical reasoning and text embeddings  
 
-🛠️ Features
-1. Anti-Cheat Engine
+---
 
-Many candidates use ChatGPT or copy from friends. AR-1 has two layers of defense:
+## ⚙️ Setup & Installation
 
-AI Fingerprinting: It looks for common "AI phrases" (like "In today's fast-paced world").
+### Prerequisites
 
-Similarity Search: It compares every new answer to every old answer in the database. If two people submit the same thing, the agent flags them instantly.
+- **Docker**
+- **Go** (v1.22+)
+- **Python** (v3.10+)
+- **Gemini API Key** (from Google AI Studio)
 
-2. Smart Scoring
+---
 
-The agent doesn't just look for keywords. It looks for "Technical Density"—does the candidate explain how they built something, or are they just listing tools?
-
-3. Fault-Tolerance
-
-We use the Transactional Outbox Pattern. This is a professional way to ensure that the "Brain" and the "Voice" stay in sync. If the AI finishes scoring, the database ensures the email must be sent eventually.
-
-⚙️ Setup & How to Run
-Prerequisites
-
-Docker (For the Database and Message Broker)
-
-Go (v1.22+)
-
-Python (v3.10+)
-
-Gemini API Key (From Google AI Studio)
-
-Step 1: Start the Infrastructure
+### Step 1: Start the Infrastructure
 
 In the root folder, run:
 
-code
-Bash
-download
-content_copy
-expand_less
+```bash
 docker-compose up -d
+```
 
-This starts PostgreSQL (with vector search) and RabbitMQ.
+---
 
-Step 2: Initialize the Database
+### Step 2: Initialize the Database
 
-Run our setup script to create the tables:
+Run the provided SQL script to create tables, enable vector search, and set up indexing:
 
-code
-Bash
-download
-content_copy
-expand_less
+```bash
 psql -h localhost -U postgres -d hiring_agent_db -f scripts/init.sql
+```
 
-(If you are on a Mac and use a different username, change postgres to your username).
+> ⚠️ **Note (Mac Users):** You may need to use your Mac username instead of `postgres`.
 
-Step 3: Setup your Environment
+---
 
-Copy the .env.example file and rename it to .env.
+### Step 3: Configure Environment
 
-Open .env and paste your GEMINI_API_KEY.
+1. Copy the example environment file:
 
-(Optional) Adjust your database settings if they are different.
+```bash
+cp .env.example .env
+```
 
-Step 4: Run the System
+2. Open `.env` and add your API key:
 
-Open 4 terminal windows and run these in order:
+```env
+GEMINI_API_KEY=your_api_key_here
+```
 
-The Brain (Python):
+---
+
+##  Running the Agent
+
+To run the distributed system, open **4 separate terminal windows** and execute the services in the following order:
+
+### 1.  The Brain (Python Analyzer)
+
+```bash
 export PYTHONPATH=$PYTHONPATH:. && python3 cmd/analyzer/main.py
+```
 
-The Voice (Go):
-go run cmd/communicator/main.go
+---
 
-The Relay (Go):
+### 2.  The Relay (Go Outbox Poller)
+
+```bash
 go run cmd/outbox_poller/main.go
+```
 
-The Feeder (Go):
+---
+
+### 3.  The Voice (Go Communicator)
+
+```bash
+go run cmd/communicator/main.go
+```
+
+---
+
+### 4.  The Feeder (Go Ingestor)
+
+```bash
 go run cmd/ingestor/main.go
+```
 
-📂 Project Structure
+---
 
-/cmd: The main entry points for all our services (Go and Python).
+##  Proof of Concept: Anti-Cheat Validation
 
-/internal: The "guts" of the system—where the AI logic and database code live.
+During the final test run, the system processed **4 candidates**. The **Anti-Cheat Engine** behaved as expected:
 
-/scripts: The SQL files to set up your database.
+### Case 1: Vikram Singh
+- Submitted a legitimate technical answer  
+- System classified him as: **STANDARD**
 
-docker-compose.yml: The "One-Click" setup for the server environment.
+---
 
-Proof of Concept
+### Case 2: Sameer Gupta
+- Submitted the **exact same answer** as Vikram (test case)
 
-During our test run with 4 mock candidates:
+#### System Behavior:
+- Python Analyzer generated a **vector embedding**
+- Performed **Cosine Similarity search** in PostgreSQL
+- Detected a **99% similarity match** with Vikram’s answer  
 
-Vikram Singh was scored as STANDARD because he had a good technical answer.
-
-Sameer Gupta submitted the exact same answer as Vikram. The system detected the similarity, issued a Strike, and automatically changed his status to REJECT (Fraud).
-
+####  Outcome:
+- Issued an automatic **Strike**  
+- Flagged candidate as: **REJECT (Fraud)**  
+- Generated a contextual rejection message  
+- All actions performed **without human intervention**  
