@@ -6,7 +6,7 @@ import logging
 from dotenv import load_dotenv
 from internal.intelligence.processor import IntelligenceProcessor
 
-# Setup Logging (Essential for 24/7 autonomous agents)
+# Setup Logging 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -15,12 +15,12 @@ def main():
     load_dotenv()
     
     db_params = {
-        "host": "localhost",
-        "database": "hiring_agent_db",
-        "user": "arunima",
-        "password": "", 
-        "port": 5432
-    }
+    "host": os.getenv("DB_HOST"),
+    "database": os.getenv("DB_NAME"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
+    "port": int(os.getenv("DB_PORT", 5432))
+}
     
     gemini_key = os.getenv("GEMINI_API_KEY")
     if not gemini_key:

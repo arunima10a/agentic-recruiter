@@ -8,13 +8,23 @@ import (
 	"os"
 
 	"github.com/arunima10a/agentic-recruiter/internal/domain"
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
-
 func main() {
 	// Setup Database Connection
-	db, err := sql.Open("postgres", "user=arunima dbname=hiring_agent_db sslmode=disable")
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	dbUser := os.Getenv("DB_USER")
+	dbName := os.Getenv("DB_NAME")
+
+	connStr := fmt.Sprintf("user=%s dbname=%s sslmode=disable", dbUser, dbName)
+
+	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatal("DB Connection failed:", err)
 	}
@@ -44,7 +54,7 @@ func main() {
 			fmt.Printf("Skipping %s: No answer content found.\n", c.Name)
 			continue
 		}
-		
+
 		tx, err := db.Begin()
 		if err != nil {
 			log.Printf("Could not start transaction for %s: %v", c.Name, err)
@@ -72,22 +82,22 @@ func main() {
 			payload, _ := json.Marshal(c)
 			_, err = tx.Exec(`
 				INSERT INTO outbox (topic, payload) 
-				VALUES ($1, $2)`, 
+				VALUES ($1, $2)`,
 				"candidate.ingested", payload)
-			
+
 			if err != nil {
 				tx.Rollback()
 				fmt.Printf("Failed to save outbox for %s: %v\n", c.Name, err)
 				continue
 			}
-	
+
 			// COMMIT
 			if err := tx.Commit(); err != nil {
 				fmt.Printf("Transaction commit failed for %s: %v\n", c.Name, err)
 			} else {
 				fmt.Printf("%s saved to DB and Outbox (Atomic)\n", c.Name)
 			}
-	
+
 		} else {
 			// candidate already exists, close the transaction
 			tx.Rollback()
