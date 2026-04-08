@@ -12,6 +12,7 @@ type VettedEvent struct {
 	ExternalID string `json:"external_id"`
 	Tier       string `json:"tier"`
 	Reasoning  string `json:"reasoning"`
+	NextQ      string `json:"next_q"`
 }
 
 
@@ -56,16 +57,20 @@ func sendEngagement(e VettedEvent) {
 	switch e.Tier {
 	case "REJECT (Fraud)":
 		message = fmt.Sprintf("Hello. Our integrity system flagged your response: %s. We will not be proceeding.", e.Reasoning)
-	case "FAST-TRACK":
-		message = "Your background is excellent. Let's schedule a Round 1 technical interview."
-	case "STANDARD":
-		message = "Thanks for applying. We are reviewing your profile against our current stack."
+	case "FAST-TRACK", "STANDARD":
+		message = fmt.Sprintf(
+			"Hello! We reviewed your application and were interested in your background.\n\n" +
+			"Follow-up Question: %s\n\n" +
+			"Please reply to this email with your answer to move to the next round.", 
+			e.NextQ,
+		)
+
 	default:
 		message = "Thank you for your application."
 	}
 
 	// Simulate SMTP/Gmail Send
-	fmt.Printf("✉️  OUTBOUND EMAIL:\n\"%s\"\n", message)
+	fmt.Printf("✉️  OUTBOUND EMAIL TO %s:\n\"%s\"\n", e.ExternalID, message)
 	fmt.Println("--------------------------------")
 }
 

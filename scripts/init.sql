@@ -41,3 +41,11 @@ CREATE TABLE strikes (
 );
 
 CREATE INDEX ON candidate_embeddings USING hnsw (embedding vector_cosine_ops);
+
+-- Track the conversation round and history
+ALTER TABLE candidates ADD COLUMN current_round INT DEFAULT 1;
+ALTER TABLE candidates ADD COLUMN conversation_history JSONB DEFAULT '[]'::jsonb;
+
+-- New scores for Component 2 (The 5-Year Builder)
+ALTER TABLE candidates ADD COLUMN longevity_score INT DEFAULT 0;
+ALTER TABLE candidates ADD COLUMN hunger_score INT DEFAULT 0;

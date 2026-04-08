@@ -6,14 +6,11 @@ import google.generativeai as genai
 
 class IntelligenceProcessor:
     def __init__(self, db_params, gemini_key):
-        self.db_params = db_params
         self.conn = psycopg2.connect(**db_params)
         register_vector(self.conn)
-        
         genai.configure(api_key=gemini_key)
-        self.model = genai.GenerativeModel('gemini-2.5-flash')
+        self.model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
         
-        # Self-healing model discovery
         self.embed_model = "models/text-embedding-004"
         try:
             for m in genai.list_models():
@@ -22,96 +19,92 @@ class IntelligenceProcessor:
                     break
         except: pass
 
-        self.fingerprints = [
-            r"in today's rapidly evolving",
-            r"comprehensive overview",
-            r"it is important to note",
-            r"I'd be happy to help"
-        ]
-
     def get_embedding(self, text):
-        """Generates a vector and forces it to 768 dimensions."""
-        result = genai.embed_content(
-            model=self.embed_model, 
-            content=text, 
-            task_type="retrieval_document",
-            output_dimensionality=768 # Forces 768 to match Postgres
-        )
+        result = genai.embed_content(model=self.embed_model, content=text, task_type="retrieval_document", output_dimensionality=768)
         return result['embedding']
 
-    def check_anti_cheat(self, ext_id, answer_text, embedding):
-        strikes = 0
-        reasons = []
-        for pattern in self.fingerprints:
-            if re.search(pattern, answer_text.lower()):
-                strikes += 1
-                reasons.append("AI Fingerprint Detected")
-                break
+    def perform_deep_analysis(self, name, answer_text):
+        prompt = f"""
+        You are a Senior Technical Recruiter. Evaluate this candidate for a 5-year career role.
+        Candidate: {name} | Answer: "{answer_text}"
 
-        # Similarity check
-        with self.conn.cursor() as cur:
-            try:
-                query = """
-                SELECT c.name FROM candidate_embeddings ce
-                JOIN candidates c ON c.id = ce.candidate_id
-                WHERE ce.embedding <=> %s::vector < 0.15 
-                AND c.external_id != %s LIMIT 1
-            """
-                cur.execute(query, (embedding, ext_id))
-                match = cur.fetchone()
-                if match:
-                    strikes += 1
-                    reasons.append(f"Copied from {match[0]}")
-            except Exception as e:
-                print(f"Similarity check failed: {e}")
-                self.conn.rollback() # RESET THE CONNECTION
-        return strikes, reasons
+        CRITERIA:
+        1. Technical Ability (1-10).
+        2. Longevity/Hunger (1-10): Builders vs Mass-Appliers.
+        3. AI Detection: 
+           - Set is_ai_generated to true ONLY if you see high-certainty AI filler.
+           - If it is just a short, bad human answer, set is_ai_generated to false and tier to REJECT.
+        4. Round 2 Question: A specific deep-dive based on their answer.
 
-    def score_technical_answer(self, answer_text):
-        prompt = f"Analyze this tech answer. Return ONLY JSON: {answer_text}"
+        Return ONLY JSON:
+        {{"tech_score": int, "longevity_score": int, "hunger_score": int, "is_ai_generated": bool, "reasoning": "string", "tier": "FAST-TRACK|STANDARD|REJECT", "next_round_question": "string"}}
+        """
         response = self.model.generate_content(prompt)
-        clean_json = response.text.replace("```json", "").replace("```", "").strip()
-        return json.loads(clean_json)
+        return json.loads(response.text.replace("```json", "").replace("```", "").strip())
 
     def process_and_save(self, candidate_data):
         ext_id = candidate_data['id']
+        name = candidate_data['name']
         answer = candidate_data['raw_answer']
+        strikes = 0
 
-        try:
-            embedding = self.get_embedding(answer)
-            strikes, anti_cheat_reasons = self.check_anti_cheat(ext_id, answer, embedding)
+        # 1. THE SIMILARITY CHECK (Now inline, with the Timestamp Fix)
+        embedding = self.get_embedding(answer)
+        with self.conn.cursor() as cur:
+            # We compare the current candidate against OLDER candidates only
+            cur.execute("""
+                SELECT c.name FROM candidate_embeddings ce 
+                JOIN candidates c ON c.id = ce.candidate_id 
+                WHERE ce.embedding <=> %s::vector < 0.15 
+                AND c.external_id != %s 
+                AND c.created_at < (SELECT created_at FROM candidates WHERE external_id = %s)
+                LIMIT 1
+            """, (embedding, ext_id, ext_id))
+            match = cur.fetchone()
+        
+        # 2. THE AI BRAIN ANALYSIS (Technical + Longevity + AI Detection)
+        eval_data = self.perform_deep_analysis(name, answer)
+        
+        # 3. DECISION LOGIC (Merging the two signals)
+        if match:
+            # If a match is found in the DB, it's Plagiarism
+            strikes += 1
+            eval_data['tier'] = "REJECT (Fraud)"
+            eval_data['reasoning'] = f"⚠️ Plagiarism detected. Answer matches previous candidate: {match[0]}."
+        elif eval_data['is_ai_generated']:
+            # If the AI is sure it's ChatGPT, it's AI Detected
+            strikes += 1
+            eval_data['tier'] = "REJECT (AI Detected)"
+        
+        # Note: If it's just a bad human answer (like Aarav), 
+        # perform_deep_analysis will set tier to REJECT with strikes = 0.
 
-            if strikes >= 1:
-                tier, tech_score, qual_score = "REJECT (Fraud)", 0, 0
-                reasoning = f"⚠️ Fraud: {', '.join(anti_cheat_reasons)}"
-            else:
-                eval_data = self.score_technical_answer(answer)
-                tier, reasoning = eval_data.get('tier', 'STANDARD'), eval_data.get('reasoning', '')
-                tech_score, qual_score = eval_data.get('tech_score', 0), eval_data.get('quality_score', 0)
+        # 4. ATOMIC SAVE
+        self._atomic_save(name, ext_id, eval_data, embedding, strikes)
 
-            self._atomic_save(ext_id, tier, reasoning, tech_score, qual_score, embedding, strikes)
-        except Exception as e:
-            print(f"ERROR IN PIPELINE {e}")
-            self.conn.rollback() # Reset connection on failure
-            raise e
-
-    def _atomic_save(self, ext_id, tier, reasoning, tech_score, qual_score, embedding, strikes):
-        with self.conn: # This starts a transaction
+    def _atomic_save(self, name, ext_id, eval, vector, strikes):
+        with self.conn:
             with self.conn.cursor() as cur:
                 cur.execute("""
                     UPDATE candidates SET 
                     status = 'SCORED', tier = %s, reasoning = %s, 
-                    technical_score = %s, quality_score = %s, strike_count = %s
+                    technical_score = %s, longevity_score = %s, hunger_score = %s,
+                    strike_count = %s, current_round = 1
                     WHERE external_id = %s RETURNING id
-                """, (tier, reasoning, tech_score, qual_score, strikes, ext_id))
+                """, (eval['tier'], eval['reasoning'], eval['tech_score'], 
+                      eval['longevity_score'], eval['hunger_score'], strikes, ext_id))
                 
                 res = cur.fetchone()
-                if res:
-                    internal_id = res[0]
-                    cur.execute("INSERT INTO candidate_embeddings (candidate_id, embedding) VALUES (%s, %s)", (internal_id, embedding))
-                    event_payload = json.dumps({"external_id": ext_id, "tier": tier, "reasoning": reasoning})
-                    cur.execute("INSERT INTO outbox (topic, payload) VALUES (%s, %s)", ("candidate.vetted", event_payload))
-                    print(f"Processed {ext_id}: {tier}")
+                if not res: return
+                internal_id = res[0]
+
+                cur.execute("INSERT INTO candidate_embeddings (candidate_id, embedding) VALUES (%s, %s)", (internal_id, vector))
+                history = [{"round": 1, "q": "Initial", "a": "", "next_q": eval['next_round_question']}]
+                cur.execute("UPDATE candidates SET conversation_history = %s WHERE id = %s", (json.dumps(history), internal_id))
+
+                payload = json.dumps({"external_id": ext_id, "tier": eval['tier'], "next_q": eval['next_round_question'], "reasoning": eval['reasoning']})
+                cur.execute("INSERT INTO outbox (topic, payload) VALUES (%s, %s)", ("candidate.vetted", payload))
+                print(f"✅ Processed {name}: Tier={eval['tier']} | Strikes={strikes}")
 
     def close(self):
         self.conn.close()
