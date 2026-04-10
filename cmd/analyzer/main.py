@@ -2,6 +2,7 @@ import os
 import pika
 import json
 import logging
+import time
 from dotenv import load_dotenv
 from internal.intelligence.processor import IntelligenceProcessor
 
@@ -26,7 +27,7 @@ def main():
         logger.error("❌ GEMINI_API_KEY is missing in .env file.")
         return
 
-    # Initialize Intelligence processor 
+    # initialize Intelligence processor 
     try:
         processor = IntelligenceProcessor(db_params, gemini_key)
         logger.info(" Brain Initialized: Gemini + pgvector are ready.")
@@ -39,37 +40,43 @@ def main():
         connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
         channel = connection.channel()
 
-        # Declare the queue we expect Go to publish to
         channel.queue_declare(queue='candidate.ingested', durable=True)
         
-        # Ensure "Fair Dispatch" (One candidate at a time per worker)
         channel.basic_qos(prefetch_count=1)
 
         logger.info("Analyzer Worker is listening for candidates...")
 
         def on_message(ch, method, properties, body):
-            """
-            This function runs every time a new candidate is 'Ingested' by Go.
-            """
             try:
-                # A. Parse the candidate data
-                candidate_data = json.loads(body)
-
-                logger.info(f"ANALYZING: {candidate_data.get('name')}")
-
-                # B. Execute the full Pipeline (Embedding -> Anti-Cheat -> Scoring -> DB Save)
-                processor.process_and_save(candidate_data)
-
-                # C. Confirm completion to RabbitMQ
+                data = json.loads(body)
+                
+                # ROUTING LOGIC: determine if this is a New App or a Reply
+                if method.routing_key == 'candidate.ingested':
+                    logger.info(f" ROUND 1: Analyzing New Application - {data.get('name')}")
+                    processor.process_and_save(data)
+                
+                elif method.routing_key == 'candidate.replied':
+                    logger.info(f"ROUND 2: Evaluating Technical Reply - {data.get('external_id')}")
+                    processor.process_reply(data)
+                
                 ch.basic_ack(delivery_tag=method.delivery_tag)
-                logger.info(f"✅ Successfully Vetted: {candidate_data.get('name')}")
 
             except Exception as e:
-                logger.error(f"⚠️ Error in Analysis Pipeline: {e}")
-                # Reject the message and put it back in the queue to try again
+                logger.error(f"⚠️ Pipeline Error: {e}")
+                time.sleep(5)
                 ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
 
-        # 5. Start Consuming
+        # Start consuming from BOTH queues
+        channel.basic_consume(queue='candidate.ingested', on_message_callback=on_message)
+        channel.basic_consume(queue='candidate.replied', on_message_callback=on_message)
+
+        logger.info(" Brain is active. Listening for New Apps and Replies...")
+        channel.start_consuming()
+
+    except Exception as e:
+        logger.error(f"❌ Connection Error: {e}")
+
+        # Start Consuming
         channel.basic_consume(queue='candidate.ingested', on_message_callback=on_message)
         channel.start_consuming()
 

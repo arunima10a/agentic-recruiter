@@ -15,15 +15,18 @@ type VettedEvent struct {
 	NextQ      string `json:"next_q"`
 }
 
-
 func main() {
 	//Connect to RabbitMQ
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
-	if err != nil { log.Fatal(err) }
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer conn.Close()
 
 	ch, err := conn.Channel()
-	if err != nil { log.Fatal(err) }
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer ch.Close()
 
 	_, err = ch.QueueDeclare(
@@ -34,7 +37,9 @@ func main() {
 		false,              // no-wait
 		nil,                // arguments
 	)
-	if err != nil { log.Fatal("Failed to declare queue:", err) }
+	if err != nil {
+		log.Fatal("Failed to declare queue:", err)
+	}
 
 	// Consume from 'candidate.vetted' (events from Python via Outbox)
 	msgs, _ := ch.Consume("candidate.vetted", "", true, false, false, false, nil)
@@ -43,9 +48,11 @@ func main() {
 
 	for d := range msgs {
 		var event VettedEvent
-		json.Unmarshal(d.Body, &event)
-
-		// 3. Multi-Round Contextual Logic (Component 3)
+		err := json.Unmarshal(d.Body, &event)
+		if err != nil {
+			fmt.Printf(" JSON Error: %v\n", err)
+			continue
+		}
 		sendEngagement(event)
 	}
 }
@@ -59,11 +66,13 @@ func sendEngagement(e VettedEvent) {
 		message = fmt.Sprintf("Hello. Our integrity system flagged your response: %s. We will not be proceeding.", e.Reasoning)
 	case "FAST-TRACK", "STANDARD":
 		message = fmt.Sprintf(
-			"Hello! We reviewed your application and were interested in your background.\n\n" +
-			"Follow-up Question: %s\n\n" +
-			"Please reply to this email with your answer to move to the next round.", 
+			"Hello! We reviewed your application and were interested in your background.\n\n"+
+				"Follow-up Question: %s\n\n"+
+				"Please reply to this email with your answer to move to the next round.",
 			e.NextQ,
 		)
+	case "NUDGE":
+		message = "Hi there! Just checking in to see if you had a chance to look at the technical question we sent yesterday. We're excited to move forward with your application!"
 
 	default:
 		message = "Thank you for your application."
@@ -73,4 +82,3 @@ func sendEngagement(e VettedEvent) {
 	fmt.Printf("✉️  OUTBOUND EMAIL TO %s:\n\"%s\"\n", e.ExternalID, message)
 	fmt.Println("--------------------------------")
 }
-
