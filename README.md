@@ -16,10 +16,13 @@ The system follows **Hexagonal Architecture**, separating the “Brain” (AI lo
 
 ## 2. Intelligence Engine (Python + Gemini + pgvector)
 
-- **Candidate scoring:** Evaluates technical strength and consistency.
-- **Similarity detection:** Uses vector embeddings and pgvector to detect duplicate or copied answers.
-- **AI comparison:** Compares candidate responses with AI-generated baselines.
-- **Adaptive learning:** Improves scoring over time based on previous strong candidates.
+- **Deep Scoring:** Evaluates technical strength and consistency to identify strong long-term candidates.
+
+- **Anti-Cheat Engine:**
+  - **Answer Similarity Check:** Uses embeddings and pgvector to find very similar or copied answers across candidates.
+  - **AI Baseline Detection:** Compares answers with an AI-generated reference using cosine similarity.
+
+- **Self-Learning:** Uses a dynamic scoring system that improves over time based on previously shortlisted candidates.
 
 ---
 
@@ -143,22 +146,20 @@ SELECT * FROM candidate_master_profiles;
 
 ---
 
-# 🎯 Example: Duplicate Detection
+# Proof of Concept: Real-Time Fraud Detection
 
-During testing:
+During testing, the system demonstrated its ability to detect "Copy-Rings":
 
-- Candidate A submitted a strong original answer → marked **FAST-TRACK**
-- Candidate B submitted a very similar answer shortly after
-
-**Result:**  
-The system detected high similarity using vector comparison and flagged it automatically.
+- Vikram Singh submitted a legitimate technical answer and was marked FAST-TRACK.
+- Sameer Gupta submitted the exact same answer 5 minutes later.
+- The Result: The system generated a 768-dim vector for Sameer, ran a Cosine Similarity search, found a 99% match with Vikram, and automatically issued a REJECT (Fraud) status with a plagiarism strike.
 
 ---
 
-# 🛠️ Tech Stack
+#  Tech Stack
 
 - **Languages:** Go (v1.22), Python (v3.12)  
 - **Database:** PostgreSQL 16 + pgvector  
 - **Message Broker:** RabbitMQ  
-- **AI:** Google Gemini (reasoning + embeddings)  
+- **AI:** Google Gemini-3.1-flash-lite-preview (reasoning + embeddings)  
 - **Automation:** Go-Rod (browser automation)
