@@ -5,13 +5,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 
 	"github.com/arunima10a/agentic-recruiter/internal/domain"
-	"github.com/go-rod/rod"
-	"github.com/go-rod/rod/lib/proto"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
@@ -33,7 +30,7 @@ func main() {
 	defer db.Close()
 
 	if *mode == "real" {
-		runRealScraper(db)
+		startRealMode(db)
 	} else {
 		runMockIngestor(db)
 	}
@@ -57,40 +54,6 @@ func runMockIngestor(db *sql.DB) {
 		}
 		saveCandidateToDB(db, c)
 	}
-}
-
-// runRealScraper handles CDP based session attachment
-func runRealScraper(db *sql.DB) {
-	fmt.Println("Attaching to Chrome (port 9222)...")
-
-	// Connecting to an existing authenticated browser session
-	u := "ws://127.0.0.1:9222"
-	browser := rod.New().ControlURL(u).MustConnect()
-
-	loadCookies(browser)
-
-	page := browser.MustPage("https://internshala.com/employer/applications/")
-
-	fmt.Println(" Network Sniffer Active. Scroll through Internshala in your browser.")
-
-	router := page.HijackRequests()
-	router.MustAdd("*/employer/applications/*", func(ctx *rod.Hijack) {
-		ctx.ContinueRequest(&proto.FetchContinueRequest{})
-
-		payload := ctx.Response.Body()
-
-		// map the real Internshala response to our domain Model
-		var rawData struct {
-			Applicants []domain.Candidate `json:"applicants"`
-		}
-		json.Unmarshal([]byte(payload), &rawData)
-
-		for _, c := range rawData.Applicants {
-			saveCandidateToDB(db, c)
-		}
-	})
-	go router.Run()
-	select {}
 }
 
 // saveCandidateToDB handles  Transactional Outbox Pattern
@@ -132,37 +95,4 @@ func saveCandidateToDB(db *sql.DB, c domain.Candidate) {
 		tx.Rollback()
 		fmt.Printf("Skipping: %s (Already exists)\n", c.Name)
 	}
-}
-
-// Save cookies to a file after a successful manual login
-func saveCookies(page *rod.Page) {
-	cookies, _ := page.Cookies(nil)
-	data, _ := json.Marshal(cookies)
-	_ = ioutil.WriteFile("cookies.json", data, 0644)
-	fmt.Println("💾 Cookies saved to vault for next session.")
-}
-
-// Load cookies from the vault to bypass login/reCAPTCHA
-func loadCookies(browser *rod.Browser) {
-	data, err := ioutil.ReadFile("cookies.json")
-	if err != nil {
-		fmt.Println(" No cookie vault found. Manual login required.")
-		return
-	}
-
-	var cookies []*proto.NetworkCookie
-	json.Unmarshal(data, &cookies)
-
-	// inject cookies into the browser context
-	for _, cookie := range cookies {
-		browser.SetCookies([]*proto.NetworkCookieParam{{
-			Name:     cookie.Name,
-			Value:    cookie.Value,
-			Domain:   cookie.Domain,
-			Path:     cookie.Path,
-			Secure:   cookie.Secure,
-			HTTPOnly: cookie.HTTPOnly,
-		}})
-	}
-	fmt.Println("Session restored from Cookie Vault.")
 }

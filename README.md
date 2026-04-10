@@ -121,16 +121,18 @@ go run cmd/nudger/main.go
 
 ---
 
-## 5. Feeder (Go Ingestor)
+### 5. The Feeder (Go Ingestor)
+The Ingestor uses an **Adapter Pattern** to switch between local simulation and real-world data extraction. 
 
-Adds candidates to the system:
+**Run with Mock Data (Recommended for Review):**
+Processes high-fidelity test candidates to demonstrate AI scoring and anti-cheat logic.
 
 ```bash
 # Run with mock data
-go run cmd/ingestor/main.go -mode=mock
+go run ./cmd/ingestor -mode=mock
 
 # Run with real data (requires Chrome debugging port 9222)
-go run cmd/ingestor/main.go -mode=real
+go run -tags scraper ./cmd/ingestor -mode=real
 ```
 
 ---
