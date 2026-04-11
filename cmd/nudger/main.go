@@ -22,11 +22,10 @@ func main() {
 	db, _ := sql.Open("postgres", connStr)
 	defer db.Close()
 
-	fmt.Println("⏰ Nudger Worker Active: Monitoring for cold candidates...")
+	fmt.Println("Nudger Worker Active: Monitoring for cold candidates...")
 
 	for {
-		// 1. Find candidates who are in 'CONTACTED' status for more than 24 hours
-		// but haven't replied yet.
+		// find candidates who are in 'CONTACTED' status for more than 24 hours but haven't replied yet
 		query := `
 			SELECT external_id, name FROM candidates 
 			WHERE status = 'CONTACTED' 
@@ -43,9 +42,9 @@ func main() {
 			var id, name string
 			rows.Scan(&id, &name)
 
-			fmt.Printf("🔔 Candidate %s has gone cold. Triggering Nudge...\n", name)
+			fmt.Printf("Candidate %s has gone cold. Triggering Nudge...\n", name)
 
-			// 2. TRANSACTIONAL OUTBOX: Queue the nudge email
+			// TRANSACTIONAL OUTBOX: Queue the nudge email
 			tx, _ := db.Begin()
 			
 			payload, _ := json.Marshal(map[string]string{
@@ -55,17 +54,14 @@ func main() {
 				"next_q": "N/A",
 			})
 
-			// Insert into outbox so the Communicator picks it up
 			tx.Exec("INSERT INTO outbox (topic, payload) VALUES ($1, $2)", "candidate.vetted", payload)
 			
-			// Update timestamp so we don't nudge them again for another 24 hours
 			tx.Exec("UPDATE candidates SET last_interaction_at = NOW() WHERE external_id = $1", id)
 			
 			tx.Commit()
 		}
 		rows.Close()
 
-		// Wait 1 minute before checking again (In production this would be 1 hour)
 		time.Sleep(1 * time.Minute)
 	}
 }
