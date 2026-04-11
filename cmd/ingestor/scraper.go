@@ -55,26 +55,36 @@ func runRealScraper(db *sql.DB) {
 	select {}
 }
 
+// Save cookies from the real session to a local file
 func saveCookies(page *rod.Page) {
-	cookies, _ := page.Cookies(nil)
-	data, _ := json.Marshal(cookies)
-	_ = ioutil.WriteFile("cookies.json", data, 0644)
-}
-
-func loadCookies(browser *rod.Browser) {
-	data, err := ioutil.ReadFile("cookies.json")
+	cookies, err := page.Cookies(nil)
 	if err != nil {
+		fmt.Printf("⚠️  Could not capture cookies: %v\n", err)
 		return
 	}
+	data, _ := json.Marshal(cookies)
+	_ = os.WriteFile("cookies.json", data, 0644)
+	fmt.Println("Cookies synced to local vault (cookies.json)")
+}
 
-	// We use a generic interface here to bypass the proto version mismatch
-	var cookies []map[string]interface{}
+// Load cookies into the browser to try and restore a session
+func loadCookies(browser *rod.Browser) {
+	data, err := os.ReadFile("cookies.json")
+	if err != nil {
+		return // No vault yet
+	}
+	var cookies []*proto.NetworkCookie
 	json.Unmarshal(data, &cookies)
 
-	fmt.Println("Attempting to restore session from Cookie Vault...")
-	// This is the "Universal" way to set cookies in Rod without strict type checks
 	for _, c := range cookies {
-		// Just log the attempt; actual injection is handled by the browser context
-		_ = c
+		_ = browser.SetCookies([]*proto.NetworkCookieParam{{
+			Name:     c.Name,
+			Value:    c.Value,
+			Domain:   c.Domain,
+			Path:     c.Path,
+			Secure:   c.Secure,
+			HTTPOnly: c.HTTPOnly,
+		}})
 	}
+	fmt.Println("Session cookies injected from vault.")
 }
