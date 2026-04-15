@@ -30,7 +30,7 @@ def main():
     # Initialize the intelligence processor 
     try:
         processor = IntelligenceProcessor(db_params, gemini_key)
-        logger.info("🧠 Intelligence Processor Initialized (Postgres + Gemini)")
+        logger.info("Intelligence Processor Initialized (Postgres + Gemini)")
     except Exception as e:
         logger.error(f"Failed to initialize Processor: {e}")
         return

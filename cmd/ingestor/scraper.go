@@ -18,18 +18,18 @@ func startRealMode(db *sql.DB) {
 
 // runRealScraper handles 
 func runRealScraper(db *sql.DB) {
-	fmt.Println("🌐 Attaching to Chrome (port 9222)...")
+	fmt.Println("Attaching to Chrome (port 9222)...")
 
-	// Connect to human-authenticated browser
+	// Connect to human authenticated browser
 	u := "ws://127.0.0.1:9222"
 	browser := rod.New().ControlURL(u).MustConnect()
 
-	// Try to restore session from vault
+	// try to restore session from vault
 	loadCookies(browser)
 
 	page := browser.MustPage("https://internshala.com/employer/applications/")
 
-	fmt.Println("🛡️  Network Sniffer Active. Scroll through Internshala.")
+	fmt.Println(" Network Sniffer Active. Scroll through Internshala.")
 
 	router := page.HijackRequests()
 	router.MustAdd("*/employer/applications/*", func(ctx *rod.Hijack) {
@@ -86,5 +86,5 @@ func loadCookies(browser *rod.Browser) {
 			HTTPOnly: c.HTTPOnly,
 		}})
 	}
-	fmt.Println("Session cookies injected from vault.")
+	fmt.Println("Session cookies injected from vault")
 }
